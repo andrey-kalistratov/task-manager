@@ -9,7 +9,7 @@ import (
 func New(path string, opts *slog.HandlerOptions) (*slog.Logger, func(), error) {
 	f, err := openFile(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, func() {}, err
 	}
 
 	logger := slog.New(slog.NewTextHandler(f, opts))
