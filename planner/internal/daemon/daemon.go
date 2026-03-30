@@ -7,6 +7,7 @@ import (
 
 	"task-manager/planner/filelogger"
 	"task-manager/planner/internal/config"
+	"task-manager/planner/internal/task"
 	"task-manager/planner/internal/task/ipc"
 	"task-manager/planner/internal/task/sqlite"
 	"task-manager/planner/unixsocket"
@@ -30,9 +31,10 @@ func Run(cfg *config.Config) error {
 	defer db.Close()
 
 	storage := sqlite.NewStorage(db)
+	service := task.NewService(storage)
 
 	router := unixsocket.NewRouter()
-	router.Register("add", ipc.NewAddHandler(storage))
+	router.Register("add", ipc.NewAddHandler(service))
 
 	server := unixsocket.NewServer(config.UnixSocket, router, logger)
 	return server.ListenAndServe()
