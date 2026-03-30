@@ -1,0 +1,6 @@
+{
+  "logging": {
+    "level": "debug"
+    "file": "/var/log/task-manager/planner.log"
+  }
+}
