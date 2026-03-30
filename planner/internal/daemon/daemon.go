@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/andrey-kalistratov/task-manager/planner/filelogger"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/task/ipc"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/task/sqlite"
-	"github.com/andrey-kalistratov/task-manager/planner/unixsocket"
+	"task-manager/planner/filelogger"
+	"task-manager/planner/internal/config"
+	"task-manager/planner/internal/task/ipc"
+	"task-manager/planner/internal/task/sqlite"
+	"task-manager/planner/unixsocket"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -31,10 +30,9 @@ func Run(cfg *config.Config) error {
 	defer db.Close()
 
 	storage := sqlite.NewStorage(db)
-	service := task.NewService(storage)
 
 	router := unixsocket.NewRouter()
-	router.Register("add", ipc.NewAddHandler(service))
+	router.Register("add", ipc.NewAddHandler(storage))
 
 	server := unixsocket.NewServer(config.UnixSocket, router, logger)
 	return server.ListenAndServe()

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/cli"
+	"task-manager/planner/internal/cli"
 )
 
 func main() {

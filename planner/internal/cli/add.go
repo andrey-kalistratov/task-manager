@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
-	"github.com/andrey-kalistratov/task-manager/planner/unixsocket"
+	"task-manager/planner/internal/config"
+	"task-manager/planner/unixsocket"
 
 	"github.com/spf13/cobra"
 )

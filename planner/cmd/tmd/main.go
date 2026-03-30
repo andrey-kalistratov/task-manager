@@ -4,8 +4,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/daemon"
+	"task-manager/planner/internal/config"
+	"task-manager/planner/internal/daemon"
 )
 
 func main() {
