@@ -2,70 +2,37 @@ package config
 
 import (
 	"errors"
-	"os"
+	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 )
 
-func writeFile(t *testing.T, config string) (path string, cleanup func()) {
-	f, err := os.CreateTemp("", "tm-*")
-	require.NoError(t, err)
-
-	_, err = f.WriteString(config)
-	require.NoError(t, err)
-
-	require.NoError(t, f.Close())
-
-	cleanup = func() {
-		require.NoError(t, os.Remove(f.Name()))
-	}
-	return f.Name(), cleanup
-}
-
-func testWithStr(t *testing.T, config string) (*Config, error) {
-	cfgPath, cleanup := writeFile(t, config)
-	defer cleanup()
-
-	return Load(cfgPath)
-}
-
 func TestSimpleConfig(t *testing.T) {
-	cfgStr := `[log]
-	level = "debug"
-	file = "/var/log/task-manager/planner.log"
-	`
-
-	cfg, err := testWithStr(t, cfgStr)
-	require.NoError(t, err)
+	cfg, err := Load("testdata/simple.json")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	expected := &Config{
-		Log: Log{
-			Level: "debug",
+		Logging: LogConfig{
+			Level: slog.LevelDebug,
 			File:  "/var/log/task-manager/planner.log",
 		},
 	}
-	require.Equal(t, expected, cfg)
+	if diff := cmp.Diff(expected, cfg); diff != "" {
+		t.Errorf("Load() mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestCorruptedConfig(t *testing.T) {
-	cfgStr := `[log
-	level = "warn"
-	file = "/var/log/task-manager/planner.log"
-	`
-
-	if _, err := testWithStr(t, cfgStr); !errors.Is(err, ErrLoad) {
+	if _, err := Load("testdata/corrupted.json"); !errors.Is(err, ErrLoad) {
 		t.Error("expected ErrLoad")
 	}
 }
 
 func TestInvalidLogLevel(t *testing.T) {
-	cfgStr := `[log]
-	level = "warning"
-	file = "/var/log/task-manager/planner.log"
-	`
-
-	if _, err := testWithStr(t, cfgStr); !errors.Is(err, ErrValidate) {
-		t.Error("expected ErrLoad")
+	if _, err := Load("testdata/invalid_log_level.json"); !errors.Is(err, ErrLoad) {
+		t.Error("expected ErrValidate")
 	}
 }
