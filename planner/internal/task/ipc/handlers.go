@@ -6,11 +6,11 @@ import (
 )
 
 type AddHandler struct {
-	storage task.Storage
+	service *task.Service
 }
 
-func NewAddHandler(storage task.Storage) *AddHandler {
-	return &AddHandler{storage: storage}
+func NewAddHandler(service *task.Service) *AddHandler {
+	return &AddHandler{service: service}
 }
 
 func (h *AddHandler) ServeIPC(request unixsocket.Request) unixsocket.Response {
