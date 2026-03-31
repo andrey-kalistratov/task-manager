@@ -1,28 +1,59 @@
 package config
 
 import (
+	"encoding/json"
+	"flag"
+	"io"
 	"log/slog"
 	"os"
-
-	"github.com/BurntSushi/toml"
+	"strings"
 )
 
 type Config struct {
-	WorkerCount int    `toml:"worker_count"`
-	LogLevel    string `toml:"log_level"`
-	Queue       Queue  `toml:"queue"`
+	WorkerCount int    `json:"worker_count"`
+	LogLevel    string `json:"log_level"`
+	Kafka       Kafka  `json:"kafka"`
 }
 
-type Queue struct {
-	Host string `toml:"host"`
-	Port int    `toml:"port"`
+type Kafka struct {
+	Topic   string   `json:"topic"`
+	Brokers []string `json:"brokers"`
+	GroupID string   `json:"group_id"`
 }
 
-func Load(path string) (*Config, error) {
+func Load() (*Config, error) {
 	var cfg Config
+	var path string
 
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	flag.StringVar(&path, "config", "", "path to config file")
+
+	flag.Parse()
+
+	file, err := os.Open(path)
+	if err != nil {
 		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	if str := strings.Fields(os.Getenv("KAFKA_BROKERS")); len(str) != 0 {
+		cfg.Kafka.Brokers = str
+	}
+
+	if str := os.Getenv("KAFKA_CONSUME_TOPIC"); str != "" {
+		cfg.Kafka.Topic = str
+	}
+
+	if str := os.Getenv("KAFKA_GROUP_ID"); str != "" {
+		cfg.Kafka.GroupID = str
 	}
 
 	if cfg.WorkerCount <= 0 {

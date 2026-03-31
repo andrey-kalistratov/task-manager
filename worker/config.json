@@ -1,0 +1,11 @@
+{
+  "worker_count": 5,
+  "log_level": "info",
+  "kafka": {
+    "topic": "tasks",
+    "group_id": "consumer-group-id",
+    "brokers": [
+      "localhost:9091"
+    ]
+  }
+}
