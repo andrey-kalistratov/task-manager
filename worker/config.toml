@@ -1,6 +1,0 @@
-worker_count = 5
-log_level = "info"
-
-[queue]
-host = "localhost"
-port = 9092

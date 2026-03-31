@@ -1,8 +1,10 @@
 package main
 
 import (
-	"log"
+	"context"
 	"log/slog"
+	"os/signal"
+	"syscall"
 
 	"github.com/andrey-kalistratov/task-manager/worker/internal/config"
 	"github.com/andrey-kalistratov/task-manager/worker/internal/pool"
@@ -10,16 +12,23 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load("config.toml")
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		slog.Info("unable to load config", "err", err)
+		return
 	}
+	slog.Info("config", "cfg", cfg)
 
-	consumer := queue.NewMock()
+	consumer := queue.NewKafka(cfg.Kafka.Brokers, cfg.Kafka.Topic, cfg.Kafka.GroupID)
 	p := pool.New(cfg)
 
-	if err := p.Run(consumer); err != nil {
-		log.Fatal(err)
+	ctx, cancel := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer cancel()
+
+	if err := p.Run(ctx, consumer); err != nil {
+		slog.Error("finished with error!", "err", err)
 	}
 
 	slog.Info("Exitting!")

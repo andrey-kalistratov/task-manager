@@ -1,9 +1,9 @@
 package pool
 
 import (
+	"context"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/andrey-kalistratov/task-manager/worker/internal/config"
 	"github.com/andrey-kalistratov/task-manager/worker/internal/queue"
@@ -19,14 +19,14 @@ func New(c *config.Config) *Pool {
 	return &Pool{c: c, wg: sync.WaitGroup{}}
 }
 
-func (p *Pool) Run(c queue.Consumer) error {
+func (p *Pool) Run(ctx context.Context, c queue.Consumer) error {
 	jobs := make(chan task.Task, p.c.WorkerCount)
 	slog.Info("pool started working")
 
 	// consumer filling jobs
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- c.Consume(jobs)
+		errCh <- c.Consume(ctx, jobs)
 	}()
 
 	for range p.c.WorkerCount {
@@ -34,11 +34,8 @@ func (p *Pool) Run(c queue.Consumer) error {
 		go p.worker(jobs)
 	}
 
-	select {
-	case err := <-errCh:
-		return err
-	case <-time.After(6 * time.Second):
-		slog.Info("Time is up, stop working")
+	if err := <-errCh; err != nil {
+		slog.Error("finishing", "err", err)
 	}
 
 	close(jobs)
