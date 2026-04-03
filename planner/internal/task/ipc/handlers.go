@@ -1,8 +1,8 @@
 package ipc
 
 import (
-	"task-manager/planner/internal/task"
-	"task-manager/planner/unixsocket"
+	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
+	"github.com/andrey-kalistratov/task-manager/planner/unixsocket"
 )
 
 type AddHandler struct {

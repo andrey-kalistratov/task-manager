@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"task-manager/planner/filelogger"
-	"task-manager/planner/internal/config"
-	"task-manager/planner/internal/task"
-	"task-manager/planner/internal/task/ipc"
-	"task-manager/planner/internal/task/sqlite"
-	"task-manager/planner/unixsocket"
+	"github.com/andrey-kalistratov/task-manager/planner/filelogger"
+	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
+	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
+	"github.com/andrey-kalistratov/task-manager/planner/internal/task/ipc"
+	"github.com/andrey-kalistratov/task-manager/planner/internal/task/sqlite"
+	"github.com/andrey-kalistratov/task-manager/planner/unixsocket"
 
 	_ "github.com/mattn/go-sqlite3"
 )
