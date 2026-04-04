@@ -81,9 +81,9 @@ Planner резолвит зависимости по совпадению `@para
 
 Промежуточные файлы не покидают worker-хост. Только финальный результат загружается на file server. Planner заранее вычисляет кому поручить cleanup каждого keep-файла и прописывает это в соответствующую Task.
 
-Все Task одного pipeline получают одинаковый `pipeline_id` как Kafka partition key — гарантирует обработку одним worker-хостом. Внутри хоста каждый шаг может использовать разный Docker образ — volume общий, файлы доступны всем контейнерам.
+Все Task одного pipeline получают одинаковый `group_id` как Kafka partition key — гарантирует обработку одним worker-хостом. Внутри хоста каждый шаг может использовать разный Docker образ — volume общий, файлы доступны всем контейнерам.
 
-> Worker в текущей реализации запускается в единственном instance, так что routing pipeline на один хост актуален скорее на вырост.
+> Worker в текущей реализации запускается в единственном instance, так что routing зависимых задач на один хост актуален скорее на вырост.
 
 ---
 
@@ -96,7 +96,7 @@ Planner резолвит зависимости по совпадению `@para
 ```
 Task {
   id:          UUID
-  pipeline_id: UUID?         // null если одиночная задача
+  group_id: UUID?         // null если одиночная задача
   depends_on:  [UUID]        // task_id'ы которые должны завершиться до старта
 
   command:     string        // готовая команда с {{task:id/path}}-ссылками
@@ -118,7 +118,7 @@ Task {
 ```
 TaskResult {
   task_id:     UUID
-  pipeline_id: UUID?
+  group_id: UUID?
   status:      Success | Failure
   exit_code:   i32
   duration_ms: u64
