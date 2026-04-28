@@ -1,0 +1,8 @@
+services:
+  planner:
+    build:
+      context: .
+      dockerfile: planner/Dockerfile.tmd-debug
+    container_name: planner-debug
+    ports:
+      - "2345:2345"

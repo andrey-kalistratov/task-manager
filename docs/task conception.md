@@ -102,8 +102,8 @@ Task {
   command:     string        // готовая команда с {{task:id/path}}-ссылками
   image:       string?       // null = базовый образ
 
-  fetch:   [{ file_id: UUID, ref: string }]  // скачать с file server; ref = {{task:id/path}}
-  upload:  [{ ref: string, file_id: UUID }]  // загрузить на file server после
+  fetch:   [{ file_id: UUID, input: string }]  // скачать с file server; input = {{task:id/path}}
+  upload:  [{ input: string, file_id: UUID }]  // загрузить на file server после
   keep:    [string]                          // refs оставить в volume для следующей Task
   cleanup: [string]                          // refs удалить после выполнения (могут быть от других Task)
 
@@ -133,28 +133,37 @@ TaskResult {
 
 Основной способ наблюдения за задачами — polling. Никаких уведомлений, пользователь смотрит сам когда нужно.
 
+Везде где принимается `<id|name>` — можно передавать как UUID так и имя задачи/группы (уникальное).
+
 ```
-planner add "команда" [--in key=file ...] [--out key=file ...]   // создать задачу
-planner add "cmd1" "cmd2" "cmd3" ...                             // создать pipeline
-planner list                                                     // все задачи и статус
-planner status {task_id}                                         // детали задачи
-planner logs {task_id}                                           // полный stdout + stderr
-planner cancel {task_id}                                         // отменить
+planner run "cmd" [--image <image>] [--name <name>] [--in key=value,...] [--out key=value,...]
+planner show <id|name>
+planner logs <id|name>
+planner cancel <id|name>
+planner list
+
+planner group create [--name <name>]
+planner group add <id|name> "cmd" [--image <image>] [--name <name>]
+planner group run <id|name> [--in key=value,...] [--out key=value,...]
+planner group show <id|name>
+planner group cancel <id|name>
+planner group list
 ```
 
 ### planner list
 
 ```
-ID       STATUS    CREATED   DURATION  COMMAND
-abc123   done      2m ago    1.2s      curl https://...
-def456   running   10s ago   -         ffmpeg -i @input...
-ghi789   failed    1h ago    0.3s      whisper @audio...
+ID       NAME         STATUS    CREATED   DURATION  COMMAND
+abc123   -            done      2m ago    1.2s      curl https://...
+def456   transcode    running   10s ago   -         ffmpeg -i @input...
+ghi789   -            failed    1h ago    0.3s      whisper @audio...
 ```
 
-### planner status {task_id}
+### planner show <id|name>
 
 ```
 Task:     ghi789
+Name:     -
 Status:   failed
 Created:  2026-04-02 14:23:11
 Started:  2026-04-02 14:23:12

@@ -10,6 +10,6 @@ func NewRootCmd() *cobra.Command {
 		Use:   "tm",
 		Short: "Task Manager CLI",
 	}
-	root.AddCommand(NewAddCmd())
+	root.AddCommand(NewRunCmd())
 	return root
 }

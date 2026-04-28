@@ -1,0 +1,28 @@
+{
+  "log_level": "info",
+  "worker_count": 5,
+  "storage": {
+    "sqlite_file": "/var/lib/task-manager/planner.db",
+    "s3": {
+      "endpoint": "http://minio:${MINIO_PORT}",
+      "bucket": "${MINIO_DEFAULT_BUCKETS}",
+      "region": "${MINIO_REGION}",
+      "access_key_id": "${MINIO_ROOT_USER}",
+      "secret_access_key": "${MINIO_ROOT_PASSWORD}"
+    }
+  },
+  "messaging": {
+    "brokers": [
+      "kafka:${KAFKA_PORT}"
+    ],
+    "group_ids": {
+      "planner": "planner",
+      "worker": "worker"
+    },
+    "topics": {
+      "tasks": "${KAFKA_TASK_TOPIC}",
+      "results": "${KAFKA_RESULT_TOPIC}"
+    }
+  },
+  "shutdown_timeout": "10s"
+}
