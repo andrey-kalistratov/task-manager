@@ -3,8 +3,10 @@ package business
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 
+	"github.com/andrey-kalistratov/task-manager/planner/internal/oops"
 	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
 )
 
@@ -39,22 +41,14 @@ func NewService(opts Options) *Service {
 func (s *Service) Run(ctx context.Context, t *task.Task) error {
 	t.Uploads = make(map[task.Parameter]task.File, len(t.Inputs))
 	for param, input := range t.Inputs {
-		r, err := s.fsStorage.Download(ctx, input)
-		if err != nil {
-			return fmt.Errorf("download input %q: %w", param, err)
+		upload := task.File{
+			Path:     fmt.Sprintf("tasks/%s/%s", t.ID, param),
+			Provider: task.ProviderS3,
 		}
-
-		upload, err := s.s3Storage.Upload(ctx, r)
-		if err != nil {
-			return fmt.Errorf("upload input %q: %w", param, err)
+		if err := s.transferFile(ctx, input, upload); err != nil {
+			return fmt.Errorf("copy parameter %q file: %w", param, err)
 		}
 		t.Uploads[param] = upload
-
-		if err = r.Close(); err != nil {
-			s.logger.Error(
-				"close file", "error", err, "path", input.Path, "provider", input.Provider,
-			)
-		}
 	}
 
 	if err := s.publisher.Publish(ctx, t); err != nil {
@@ -75,8 +69,62 @@ func (s *Service) Record(ctx context.Context, result task.Result) error {
 
 	t.Status = result.Status
 
+	t.Downloads = result.Downloads
+	for param, output := range t.Outputs {
+		download, ok := t.Downloads[param]
+		if !ok {
+			return oops.ParameterError{
+				Kind:  oops.ParameterErrorOutputNotFound,
+				Param: param,
+			}
+		}
+
+		if err = s.transferFile(ctx, download, output); err != nil {
+			return fmt.Errorf("copy parameter %q file: %w", param, err)
+		}
+	}
+
 	if err = s.storage.Save(ctx, t); err != nil {
 		return fmt.Errorf("save task: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) transferFile(ctx context.Context, src, dst task.File) error {
+	r, err := s.downloadFile(ctx, src)
+	if err != nil {
+		return fmt.Errorf("download file: %w", err)
+	}
+	defer func() {
+		if err = r.Close(); err != nil {
+			s.logger.Error("close file", "error", err, "file", src)
+		}
+	}()
+
+	if err = s.uploadFile(ctx, dst, r); err != nil {
+		return fmt.Errorf("upload file: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) downloadFile(ctx context.Context, f task.File) (io.ReadCloser, error) {
+	switch f.Provider {
+	case task.ProviderFS:
+		return s.fsStorage.Download(ctx, f.Path)
+	case task.ProviderS3:
+		return s.s3Storage.Download(ctx, f.Path)
+	default:
+		return nil, fmt.Errorf("unknown storage provider: %v", f.Provider)
+	}
+}
+
+func (s *Service) uploadFile(ctx context.Context, f task.File, r io.Reader) error {
+	switch f.Provider {
+	case task.ProviderFS:
+		return s.fsStorage.Upload(ctx, f.Path, r)
+	case task.ProviderS3:
+		return s.s3Storage.Upload(ctx, f.Path, r)
+	default:
+		return fmt.Errorf("unknown storage provider: %v", f.Provider)
+	}
 }

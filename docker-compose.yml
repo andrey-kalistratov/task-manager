@@ -9,11 +9,12 @@ services:
         condition: service_completed_successfully
       config-init:
         condition: service_completed_successfully
-      minio:
+      minio-init:
         condition: service_started
     volumes:
       - planner-data:/var/lib/task-manager
       - config-data:/etc/task-manager/planner
+      - ./testdata:/app/testdata
 
   worker:
     build:
@@ -25,7 +26,7 @@ services:
         condition: service_completed_successfully
       config-init:
         condition: service_completed_successfully
-      minio:
+      minio-init:
         condition: service_started
     command: ["worker", "-config", "/etc/task-manager/worker/config.json"]
     volumes:
@@ -105,8 +106,7 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:${KAFKA_PORT}
 
   sqlite-web:
-    image: coleifer/sqlite-web
-    platform: linux/amd64
+    image: ghcr.io/coleifer/sqlite-web:latest
     container_name: sqlite-web
     depends_on:
       - planner
@@ -117,9 +117,8 @@ services:
     volumes:
       - planner-data:/data
 
-
   minio:
-    image: minio/minio:latest
+    image: minio/minio
     container_name: minio
     ports:
       - "${MINIO_PORT}:${MINIO_PORT}"
@@ -129,9 +128,29 @@ services:
       MINIO_ROOT_PASSWORD:   ${MINIO_ROOT_PASSWORD}
       MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
       MINIO_REGION:          ${MINIO_REGION}
+    healthcheck:
+      test: [ "CMD", "mc", "ready", "local" ]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+      start_period: 3s
     command: server /data --console-address ":${MINIO_UI_PORT}"
     volumes:
       - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+    volumes:
+      - ./scripts/minio-create-bucket.sh:/init.sh:ro
+    entrypoint: sh /init.sh
 
 volumes:
   planner-data:

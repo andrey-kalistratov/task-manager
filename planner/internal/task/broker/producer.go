@@ -63,71 +63,19 @@ func newTask(t *task.Task) (*Task, error) {
 	dto := &Task{
 		ID:      t.ID,
 		Command: t.Command,
-		Fetch:   make([]Parameter, 0, len(t.Inputs)),
-		Upload:  make([]string, 0, len(t.Outputs)),
+		Fetch:   make([]Parameter, 0, len(t.Uploads)),
+		Upload:  make([]string, 0, len(t.Downloads)),
 	}
-	for name, file := range t.Inputs {
+	for name, file := range t.Uploads {
 		param, err := newParameter(name, file)
 		if err != nil {
 			return nil, fmt.Errorf("serialize input parameter: %w", err)
 		}
 
-		dto.Fetch = append(dto.Fetch, *param)
+		dto.Fetch = append(dto.Fetch, param)
 	}
-	for name := range t.Outputs {
+	for name := range t.Downloads {
 		dto.Upload = append(dto.Upload, string(name))
 	}
 	return dto, nil
-}
-
-type Parameter struct {
-	Name   string `json:"param"`
-	Source File   `json:"source"`
-}
-
-func newParameter(p task.Parameter, source task.File) (*Parameter, error) {
-	file, err := newFile(source)
-	if err != nil {
-		return nil, fmt.Errorf("serialize file %s: %w", source.Path, err)
-	}
-
-	return &Parameter{
-		Name:   string(p),
-		Source: *file,
-	}, nil
-}
-
-type File struct {
-	Path     string          `json:"path"`
-	Provider StorageProvider `json:"provider"`
-}
-
-func newFile(f task.File) (*File, error) {
-	provider, err := newProvider(f.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("serialize provider: %w", err)
-	}
-
-	return &File{
-		Path:     f.Path,
-		Provider: provider,
-	}, nil
-}
-
-type StorageProvider string
-
-const (
-	ProviderFS StorageProvider = "fs"
-	ProviderS3 StorageProvider = "s3"
-)
-
-func newProvider(p task.StorageProvider) (StorageProvider, error) {
-	switch p {
-	case task.ProviderFS:
-		return ProviderFS, nil
-	case task.ProviderS3:
-		return ProviderS3, nil
-	default:
-		return "", fmt.Errorf("unknown storage provider: %v", p)
-	}
 }

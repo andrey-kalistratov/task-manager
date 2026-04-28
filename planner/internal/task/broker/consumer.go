@@ -63,23 +63,35 @@ func (h *resultHandler) Handle(ctx context.Context, msg kafka.Message) {
 	if err = h.service.Record(ctx, r); err != nil {
 		h.logger.Error("failed to record task result", "error", err)
 	}
+	h.logger.Info("task done", "id", r.TaskID, "status", r.Status)
 }
 
 type Result struct {
-	TaskID uuid.UUID `json:"task_id"`
-	Status Status    `json:"status"`
+	TaskID uuid.UUID   `json:"task_id"`
+	Status Status      `json:"status"`
+	Fetch  []Parameter `json:"fetch"`
 }
 
 func (r Result) toModel() (task.Result, error) {
+	result := task.Result{
+		TaskID:    r.TaskID,
+		Downloads: make(map[task.Parameter]task.File),
+	}
+
 	status, err := r.Status.toModel()
 	if err != nil {
 		return task.Result{}, fmt.Errorf("deserialize result status: %w", err)
 	}
+	result.Status = status
 
-	return task.Result{
-		TaskID: r.TaskID,
-		Status: status,
-	}, nil
+	for _, param := range r.Fetch {
+		name, file, err := param.toModel()
+		if err != nil {
+			return task.Result{}, fmt.Errorf("deserialize output parameter: %w", err)
+		}
+		result.Downloads[name] = file
+	}
+	return result, nil
 }
 
 type Status string

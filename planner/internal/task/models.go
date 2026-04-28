@@ -1,6 +1,8 @@
 package task
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +23,12 @@ type Task struct {
 	Outputs   map[Parameter]File
 }
 
+type Result struct {
+	TaskID    uuid.UUID
+	Status    Status
+	Downloads map[Parameter]File
+}
+
 type Status int
 
 const (
@@ -29,11 +37,31 @@ const (
 	StatusFailed
 )
 
+func (s Status) String() string {
+	switch s {
+	case StatusRunning:
+		return "running"
+	case StatusSucceeded:
+		return "succeeded"
+	case StatusFailed:
+		return "failed"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(s))
+	}
+}
+
 type Parameter string
 
 type File struct {
 	Path     string
 	Provider StorageProvider
+}
+
+func (f File) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("path", f.Path),
+		slog.Any("provider", f.Provider),
+	)
 }
 
 type StorageProvider int
@@ -43,7 +71,13 @@ const (
 	ProviderS3
 )
 
-type Result struct {
-	TaskID uuid.UUID
-	Status Status
+func (p StorageProvider) String() string {
+	switch p {
+	case ProviderFS:
+		return "fs"
+	case ProviderS3:
+		return "s3"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(p))
+	}
 }

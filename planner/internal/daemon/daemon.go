@@ -60,7 +60,7 @@ func New(cfg *config.Config, logger *slog.Logger) (d *Daemon, err error) {
 		Closer: storage,
 	})
 
-	fsStorage := fs.NewFileStorage()
+	fsStorage := fs.NewFileStorage(logger)
 
 	s3Storage := object.NewFileStorage(cfg)
 

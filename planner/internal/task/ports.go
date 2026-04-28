@@ -27,8 +27,8 @@ type Storage interface {
 }
 
 type FileStorage interface {
-	Download(ctx context.Context, file File) (io.ReadCloser, error)
-	Upload(ctx context.Context, path string, r io.Reader) (File, error)
+	Download(ctx context.Context, path string) (io.ReadCloser, error)
+	Upload(ctx context.Context, path string, r io.Reader) error
 }
 
 //TODO указатель на file

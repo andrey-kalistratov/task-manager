@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -61,18 +62,20 @@ func (h *RunHandler) ServeIPC(ctx context.Context, req *unix.Request) unix.Respo
 		return unix.Response{Error: "internal error"}
 	}
 
+	h.logger.Info("ran task", "id", t.ID)
 	return unix.Response{Body: body}
 }
 
 func taskFromRunOptions(opts RunOptions) *task.Task {
 	t := &task.Task{
-		ID:      uuid.New(),
-		Status:  task.StatusRunning,
-		Command: opts.Command,
-		Name:    opts.Name,
-		Image:   opts.Image,
-		Inputs:  make(map[task.Parameter]task.File, len(opts.Inputs)),
-		Outputs: make(map[task.Parameter]task.File, len(opts.Outputs)),
+		ID:        uuid.New(),
+		Status:    task.StatusRunning,
+		CreatedAt: time.Now(),
+		Command:   opts.Command,
+		Name:      opts.Name,
+		Image:     opts.Image,
+		Inputs:    make(map[task.Parameter]task.File, len(opts.Inputs)),
+		Outputs:   make(map[task.Parameter]task.File, len(opts.Outputs)),
 	}
 	for name, path := range opts.Inputs {
 		t.Inputs[task.Parameter(name)] = task.File{
