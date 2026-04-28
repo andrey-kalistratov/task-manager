@@ -1,44 +1,142 @@
 services:
+  planner:
+    build:
+      context: .
+      dockerfile: planner/Dockerfile
+    container_name: planner
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      config-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+    volumes:
+      - planner-data:/var/lib/task-manager
+      - config-data:/etc/task-manager/planner
+
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
     container_name: worker
-    restart: unless-stopped
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      config-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+    command: ["worker", "-config", "/etc/task-manager/worker/config.json"]
+    volumes:
+      - config-data:/etc/task-manager/worker
+
+  config-init:
+    image: bhgedigital/envsubst
+    container_name: config-init
+    volumes:
+      - ./config.template.json:/template.json:ro
+      - config-data:/output
     environment:
-      KAFKA_CONSUME_TOPIC: "tasks"
-      KAFKA_BROKERS: "kafka1:29091"
+      KAFKA_PORT:            ${KAFKA_PORT}
+      KAFKA_TASK_TOPIC:      ${KAFKA_TASK_TOPIC}
+      KAFKA_RESULT_TOPIC:    ${KAFKA_RESULT_TOPIC}
+      MINIO_PORT:            ${MINIO_PORT}
+      MINIO_ROOT_USER:       ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD:   ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+      MINIO_REGION:          ${MINIO_REGION}
+    command: sh -c "envsubst < /template.json > /output/config.json"
 
   zookeeper:
-    image: confluentinc/cp-zookeeper
-    ports:
-      - "2181:2181"
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: zookeeper
     environment:
-      ALLOW_ANONYMOUS_LOGIN: "yes"
-      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
 
-  kafka1:
-    image: confluentinc/cp-kafka:7.2.15
-    container_name: kafka1
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kafka
     ports:
-      - "9091:9091"
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9091,PLAINTEXT_HOST://kafka1:29091
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
     depends_on:
       - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT:                zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS:             PLAINTEXT://kafka:${KAFKA_PORT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "kafka:${KAFKA_PORT}", "--list" ]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP:    kafka:${KAFKA_PORT}
+      KAFKA_TASK_TOPIC:   ${KAFKA_TASK_TOPIC}
+      KAFKA_RESULT_TOPIC: ${KAFKA_RESULT_TOPIC}
+    volumes:
+      - ./scripts/kafka-create-topics.sh:/init.sh:ro
+    entrypoint: ["bash", "/init.sh"]
 
   kafka-ui:
-    container_name: kafka-ui
     image: provectuslabs/kafka-ui:latest
-    depends_on:
-      - kafka1
+    container_name: kafka-ui
     ports:
-      - "9090:8080"
+      - "${KAFKA_UI_PORT}:${KAFKA_UI_PORT}"
+    depends_on:
+      - kafka
     environment:
-      AUTH_TYPE: DISABLED
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:29091
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      SERVER_PORT:                       ${KAFKA_UI_PORT}
+      AUTH_TYPE:                         DISABLED
+      KAFKA_CLUSTERS_0_NAME:             local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:${KAFKA_PORT}
+
+  sqlite-web:
+    image: coleifer/sqlite-web
+    platform: linux/amd64
+    container_name: sqlite-web
+    depends_on:
+      - planner
+    ports:
+      - "${SQLITE_WEB_PORT}:${SQLITE_WEB_PORT}"
+    command: [ "-H", "0.0.0.0", "-p", "${SQLITE_WEB_PORT}", "/data/planner.db" ]
+    entrypoint: [ "sqlite_web" ]
+    volumes:
+      - planner-data:/data
+
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "${MINIO_PORT}:${MINIO_PORT}"
+      - "${MINIO_UI_PORT}:${MINIO_UI_PORT}"
+    environment:
+      MINIO_ROOT_USER:       ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD:   ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+      MINIO_REGION:          ${MINIO_REGION}
+    command: server /data --console-address ":${MINIO_UI_PORT}"
+    volumes:
+      - minio-data:/data
+
+volumes:
+  planner-data:
+  config-data:
+  zookeeper-data:
+  zookeeper-log:
+  kafka-data:
+  minio-data:

@@ -1,4 +1,4 @@
-package unixsocket
+package unix
 
 import (
 	"encoding/json"

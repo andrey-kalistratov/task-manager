@@ -4,35 +4,69 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestSimpleConfig(t *testing.T) {
-	cfg, err := Load("testdata/simple.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expected := &Config{
-		Logging: LogConfig{
-			Level: slog.LevelDebug,
-			File:  "/var/log/task-manager/planner.log",
+func TestLoad(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		file     string
+		expected *Config
+		err      error
+	}{
+		{
+			name: "simple",
+			file: "testdata/simple.json",
+			expected: &Config{
+				LogLevel: slog.LevelDebug,
+				Storage: StorageConfig{
+					SqliteFile: "task-manager/planner.db",
+				},
+				ShutdownTimeout: Duration(3 * time.Second),
+			},
+			err: nil,
 		},
-	}
-	if diff := cmp.Diff(expected, cfg); diff != "" {
-		t.Errorf("Load() mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestCorruptedConfig(t *testing.T) {
-	if _, err := Load("testdata/corrupted.json"); !errors.Is(err, ErrLoad) {
-		t.Error("expected ErrLoad")
-	}
-}
-
-func TestInvalidLogLevel(t *testing.T) {
-	if _, err := Load("testdata/invalid_log_level.json"); !errors.Is(err, ErrLoad) {
-		t.Error("expected ErrValidate")
+		{
+			name: "default",
+			file: "",
+			expected: &Config{
+				LogLevel: slog.LevelError,
+				Storage: StorageConfig{
+					SqliteFile: "/var/lib/task-manager/planner.db",
+				},
+				ShutdownTimeout: Duration(5 * time.Second),
+			},
+			err: nil,
+		},
+		{
+			name:     "corrupted",
+			file:     "testdata/corrupted.json",
+			expected: nil,
+			err:      ErrLoad,
+		},
+		{
+			name:     "invalid",
+			file:     "testdata/invalid.json",
+			expected: nil,
+			err:      ErrLoad,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load(tc.file)
+			if tc.err != nil {
+				if !errors.Is(err, tc.err) {
+					t.Errorf("Load() error = %v, expected error = %v", err, tc.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expected, cfg); diff != "" {
+				t.Errorf("Load() mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

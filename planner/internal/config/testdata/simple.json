@@ -1,9 +1,11 @@
 {
   "logging": {
     "level": "debug",
-    "file": "/var/log/task-manager/planner.log"
+    "file": "task-manager/planner.log"
   },
-  "db": {
-    "file": "/var/lib/task-manager/planner.db"
-  }
+  "storage": {
+    "sqlite_file": "task-manager/planner.db",
+    "file_storage_dir": "task-manager/files"
+  },
+  "shutdown_timeout": "3s"
 }
