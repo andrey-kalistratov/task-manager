@@ -1,0 +1,7 @@
+services:
+  worker:
+    build:
+      dockerfile: Dockerfile.debug
+    container_name: worker-debug
+    ports:
+      - "2346:2345"

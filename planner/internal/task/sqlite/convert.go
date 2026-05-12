@@ -26,25 +26,25 @@ type Task struct {
 func newTask(t *task.Task) (*Task, error) {
 	status, err := newStatus(t.Status)
 	if err != nil {
-		return nil, fmt.Errorf("serialize status: %w", err)
+		return nil, fmt.Errorf("encode status: %w", err)
 	}
 
-	inputs, err := marshalParameters(t.Inputs)
+	inputs, err := marshalFiles(t.Inputs)
 	if err != nil {
 		return nil, fmt.Errorf("marshal inputs: %w", err)
 	}
 
-	uploads, err := marshalParameters(t.Uploads)
+	uploads, err := marshalFiles(t.Uploads)
 	if err != nil {
 		return nil, fmt.Errorf("marshal uploads: %w", err)
 	}
 
-	downloads, err := marshalParameters(t.Downloads)
+	downloads, err := marshalFiles(t.Downloads)
 	if err != nil {
 		return nil, fmt.Errorf("marshal downloads: %w", err)
 	}
 
-	outputs, err := marshalParameters(t.Outputs)
+	outputs, err := marshalFiles(t.Outputs)
 	if err != nil {
 		return nil, fmt.Errorf("marshal outputs: %w", err)
 	}
@@ -63,15 +63,15 @@ func newTask(t *task.Task) (*Task, error) {
 	}, nil
 }
 
-func marshalParameters(params map[task.Parameter]task.File) ([]byte, error) {
+func marshalFiles(files map[string]task.File) ([]byte, error) {
 	raw := make(map[string]File)
-	for p, f := range params {
+	for k, f := range files {
 		dto, err := newFile(f)
 		if err != nil {
-			return nil, fmt.Errorf("serialize file: %w", err)
+			return nil, fmt.Errorf("encode file: %w", err)
 		}
 
-		raw[string(p)] = dto
+		raw[k] = dto
 	}
 
 	data, err := json.Marshal(raw)
@@ -90,25 +90,25 @@ func (t *Task) toModel() (*task.Task, error) {
 
 	status, err := t.Status.toModel()
 	if err != nil {
-		return nil, fmt.Errorf("deserialize status: %w", err)
+		return nil, fmt.Errorf("parse status: %w", err)
 	}
 
-	inputs, err := unmarshalParameters(t.Inputs)
+	inputs, err := unmarshalFiles(t.Inputs)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal inputs: %w", err)
 	}
 
-	uploads, err := unmarshalParameters(t.Uploads)
+	uploads, err := unmarshalFiles(t.Uploads)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal uploads: %w", err)
 	}
 
-	downloads, err := unmarshalParameters(t.Downloads)
+	downloads, err := unmarshalFiles(t.Downloads)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal downloads: %w", err)
 	}
 
-	outputs, err := unmarshalParameters(t.Outputs)
+	outputs, err := unmarshalFiles(t.Outputs)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal outputs: %w", err)
 	}
@@ -127,22 +127,22 @@ func (t *Task) toModel() (*task.Task, error) {
 	}, nil
 }
 
-func unmarshalParameters(data []byte) (map[task.Parameter]task.File, error) {
+func unmarshalFiles(data []byte) (map[string]task.File, error) {
 	raw := make(map[string]File)
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("unmarshal parameters: %w", err)
 	}
 
-	params := make(map[task.Parameter]task.File)
-	for p, f := range raw {
+	files := make(map[string]task.File)
+	for k, f := range raw {
 		dto, err := f.toModel()
 		if err != nil {
-			return nil, fmt.Errorf("deserialize file: %w", err)
+			return nil, fmt.Errorf("parse file: %w", err)
 		}
 
-		params[task.Parameter(p)] = dto
+		files[k] = dto
 	}
-	return params, nil
+	return files, nil
 }
 
 type Status string
@@ -187,7 +187,7 @@ type File struct {
 func newFile(f task.File) (File, error) {
 	provider, err := newProvider(f.Provider)
 	if err != nil {
-		return File{}, fmt.Errorf("serialize provider: %w", err)
+		return File{}, fmt.Errorf("encode provider: %w", err)
 	}
 
 	return File{
@@ -199,7 +199,7 @@ func newFile(f task.File) (File, error) {
 func (f File) toModel() (task.File, error) {
 	provider, err := f.Provider.toModel()
 	if err != nil {
-		return task.File{}, fmt.Errorf("deserialize provider: %w", err)
+		return task.File{}, fmt.Errorf("parse provider: %w", err)
 	}
 
 	return task.File{

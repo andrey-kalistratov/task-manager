@@ -1,8 +1,8 @@
 services:
   planner:
     build:
-      context: .
-      dockerfile: planner/Dockerfile
+      context: ./planner
+      dockerfile: Dockerfile
     container_name: planner
     depends_on:
       kafka-init:
@@ -10,16 +10,17 @@ services:
       config-init:
         condition: service_completed_successfully
       minio-init:
-        condition: service_started
+        condition: service_completed_successfully
     volumes:
       - planner-data:/var/lib/task-manager
       - config-data:/etc/task-manager/planner
       - ./testdata:/app/testdata
 
   worker:
+    privileged: true
     build:
-      context: .
-      dockerfile: worker/Dockerfile
+      context: worker
+      dockerfile: Dockerfile
     container_name: worker
     depends_on:
       kafka-init:
@@ -27,26 +28,18 @@ services:
       config-init:
         condition: service_completed_successfully
       minio-init:
-        condition: service_started
-    command: ["worker", "-config", "/etc/task-manager/worker/config.json"]
+        condition: service_completed_successfully
     volumes:
       - config-data:/etc/task-manager/worker
 
   config-init:
     image: bhgedigital/envsubst
     container_name: config-init
+    platform: linux/amd64
     volumes:
       - ./config.template.json:/template.json:ro
       - config-data:/output
-    environment:
-      KAFKA_PORT:            ${KAFKA_PORT}
-      KAFKA_TASK_TOPIC:      ${KAFKA_TASK_TOPIC}
-      KAFKA_RESULT_TOPIC:    ${KAFKA_RESULT_TOPIC}
-      MINIO_PORT:            ${MINIO_PORT}
-      MINIO_ROOT_USER:       ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD:   ${MINIO_ROOT_PASSWORD}
-      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
-      MINIO_REGION:          ${MINIO_REGION}
+    env_file: .env
     command: sh -c "envsubst < /template.json > /output/config.json"
 
   zookeeper:
@@ -108,6 +101,7 @@ services:
   sqlite-web:
     image: ghcr.io/coleifer/sqlite-web:latest
     container_name: sqlite-web
+    platform: linux/amd64
     depends_on:
       - planner
     ports:
@@ -154,6 +148,7 @@ services:
 
 volumes:
   planner-data:
+  exec-workdir:
   config-data:
   zookeeper-data:
   zookeeper-log:

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/oops"
 	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
 )
 
@@ -20,26 +19,26 @@ type FileStorage struct {
 	logger *slog.Logger
 }
 
-func NewFileStorage(logger *slog.Logger) *FileStorage {
+func NewStorage(logger *slog.Logger) *FileStorage {
 	return &FileStorage{logger: logger}
 }
 
 func (s FileStorage) Download(_ context.Context, path string) (io.ReadCloser, error) {
 	src, err := os.Open(path)
 	if err != nil {
-		return nil, makeFileErr(path, err)
+		return nil, toFileErr(path, err)
 	}
 	return src, nil
 }
 
 func (s FileStorage) Upload(_ context.Context, path string, r io.Reader) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return makeFileErr(path, err)
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return toFileErr(path, err)
 	}
 
 	dst, err := os.Create(path)
 	if err != nil {
-		return makeFileErr(path, err)
+		return toFileErr(path, err)
 	}
 	defer func() {
 		if err = dst.Close(); err != nil {
@@ -55,21 +54,26 @@ func (s FileStorage) Upload(_ context.Context, path string, r io.Reader) error {
 	return nil
 }
 
-func makeFileErr(path string, err error) oops.FileError {
-	fileErr := oops.FileError{
-		File: task.File{
-			Path:     path,
-			Provider: task.ProviderFS,
-		},
-		Err: err,
+func toFileErr(path string, err error) error {
+	file := task.File{
+		Path:     path,
+		Provider: task.ProviderFS,
 	}
+
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		fileErr.Kind = oops.FileErrorNotFound
+		return &task.FileError{
+			Kind: task.FileErrorNotFound,
+			File: file,
+			Err:  err,
+		}
 	case errors.Is(err, fs.ErrPermission):
-		fileErr.Kind = oops.FileErrorPermission
+		return &task.FileError{
+			Kind: task.FileErrorPermission,
+			File: file,
+			Err:  err,
+		}
 	default:
-		fileErr.Kind = oops.FileErrorUnknown
+		return err
 	}
-	return fileErr
 }

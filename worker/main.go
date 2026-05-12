@@ -2,34 +2,52 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"log"
 	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/andrey-kalistratov/task-manager/worker/internal/application"
 	"github.com/andrey-kalistratov/task-manager/worker/internal/config"
-	"github.com/andrey-kalistratov/task-manager/worker/internal/pool"
-	"github.com/andrey-kalistratov/task-manager/worker/internal/queue"
 )
 
+// Inspired by https://grafana.com/blog/how-i-write-http-services-in-go-after-13-years.
 func main() {
-	cfg, err := config.Load()
+	if err := run(context.Background()); err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	cfgPath := flag.String("config", "", "path to config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		slog.Info("unable to load config", "err", err)
-		return
-	}
-	slog.Info("config", "cfg", cfg)
-
-	consumer := queue.NewKafka(cfg.Kafka.Brokers, cfg.Kafka.Topic, cfg.Kafka.GroupID)
-	p := pool.New(cfg)
-
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		syscall.SIGINT, syscall.SIGTERM,
-	)
-	defer cancel()
-
-	if err := p.Run(ctx, consumer); err != nil {
-		slog.Error("finished with error!", "err", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
-	slog.Info("Exitting!")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: cfg.LogLevel,
+	}))
+	logger.Info("loaded config")
+
+	app, err := application.New(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("initialize app: %w", err)
+	}
+	logger.Info("initialized app")
+
+	if err = app.Run(ctx); err != nil {
+		return fmt.Errorf("run app: %w", err)
+	}
+	logger.Info("app exited")
+	return nil
 }

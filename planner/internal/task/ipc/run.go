@@ -3,30 +3,35 @@ package ipc
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/oops"
 	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
-	"github.com/andrey-kalistratov/task-manager/planner/unix"
 )
 
-type RunHandler struct {
-	service task.Service
-	logger  *slog.Logger
+const runPath = "/run"
+
+type Runner interface {
+	Run(ctx context.Context, task *task.Task) error
 }
 
-func NewRunHandler(service task.Service, logger *slog.Logger) *RunHandler {
-	return &RunHandler{
-		service: service,
-		logger:  logger,
+type runHandler struct {
+	runner Runner
+	logger *slog.Logger
+}
+
+func newRunHandler(runner Runner, logger *slog.Logger) *runHandler {
+	return &runHandler{
+		runner: runner,
+		logger: logger,
 	}
 }
 
-type RunOptions struct {
+type RunRequest struct {
 	Command string            `json:"command"`
 	Name    string            `json:"name"`
 	Image   string            `json:"image"`
@@ -34,60 +39,54 @@ type RunOptions struct {
 	Outputs map[string]string `json:"outputs"`
 }
 
-type RunResult struct {
+type RunResponse struct {
 	ID uuid.UUID `json:"id"`
 }
 
-func (h *RunHandler) ServeIPC(ctx context.Context, req *unix.Request) unix.Response {
-	var opts RunOptions
-	if err := json.Unmarshal(req.Body, &opts); err != nil {
-		h.logger.Error("failed to unmarshal run request", "error", err)
-		return unix.Response{Error: "internal error"}
+func (h *runHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var req RunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode request", "error", err)
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
 	}
 
-	t := taskFromRunOptions(opts)
+	t := taskFromRunRequest(req)
 
-	if err := h.service.Run(ctx, t); err != nil {
-		h.logger.Error("failed to run task", "error", err)
-
-		if fileErr, ok := errors.AsType[oops.FileError](err); ok {
-			return unix.Response{Error: fileErr.Error()}
-		}
-		return unix.Response{Error: "internal error"}
+	if err := h.runner.Run(r.Context(), t); err != nil {
+		h.logger.Error("failed to handle request", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	body, err := json.Marshal(RunResult{ID: t.ID})
-	if err != nil {
-		h.logger.Error("failed to marshal run result", "error", err)
-		return unix.Response{Error: "internal error"}
-	}
+	resp := RunResponse{ID: t.ID}
 
-	h.logger.Info("ran task", "id", t.ID)
-	return unix.Response{Body: body}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("failed to encode response", "error", err)
+	}
 }
 
-func taskFromRunOptions(opts RunOptions) *task.Task {
-	t := &task.Task{
+func taskFromRunRequest(r RunRequest) *task.Task {
+	return &task.Task{
 		ID:        uuid.New(),
 		Status:    task.StatusRunning,
 		CreatedAt: time.Now(),
-		Command:   opts.Command,
-		Name:      opts.Name,
-		Image:     opts.Image,
-		Inputs:    make(map[task.Parameter]task.File, len(opts.Inputs)),
-		Outputs:   make(map[task.Parameter]task.File, len(opts.Outputs)),
+		Command:   strings.Replace(r.Command, "@", "./", -1),
+		Name:      r.Name,
+		Image:     r.Image,
+		Inputs:    filesFromPaths(r.Inputs),
+		Outputs:   filesFromPaths(r.Outputs),
 	}
-	for name, path := range opts.Inputs {
-		t.Inputs[task.Parameter(name)] = task.File{
+}
+
+func filesFromPaths(paths map[string]string) map[string]task.File {
+	files := make(map[string]task.File, len(paths))
+	for name, path := range paths {
+		files[name] = task.File{
 			Path:     path,
 			Provider: task.ProviderFS,
 		}
 	}
-	for name, path := range opts.Outputs {
-		t.Outputs[task.Parameter(name)] = task.File{
-			Path:     path,
-			Provider: task.ProviderFS,
-		}
-	}
-	return t
+	return files
 }

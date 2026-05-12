@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
 FROM golang:1.26-alpine AS builder
-WORKDIR /app
+WORKDIR /worker
 
 RUN apk add --no-cache gcc musl-dev
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go install github.com/go-delve/delve/cmd/dlv@latest
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -14,13 +18,14 @@ COPY .. .
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -o /bin/worker .
+    go build -gcflags="all=-N -l" -o /bin/worker .
 
 FROM alpine:3.19
-WORKDIR /app
+WORKDIR /worker
 
 RUN apk add --no-cache docker
 
+COPY --from=builder /go/bin/dlv /usr/local/bin/dlv
 COPY --from=builder /bin/worker /usr/local/bin/worker
 
-ENTRYPOINT ["worker"]
+ENTRYPOINT ["dlv", "--listen=:2345", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/usr/local/bin/worker"]

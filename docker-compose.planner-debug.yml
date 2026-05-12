@@ -1,0 +1,7 @@
+services:
+  planner:
+    build:
+      dockerfile: Dockerfile.debug
+    container_name: planner-debug
+    ports:
+      - "2345:2345"

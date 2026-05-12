@@ -48,9 +48,10 @@ type S3Config struct {
 
 	// SecretAccessKey signs requests locally. Never sent over the wire.
 	SecretAccessKey string `json:"secret_access_key"`
-}
 
-// TODO: integrate MessageConfig, S3Config
+	// Prefix is the root prefix to store objects.
+	Prefix string `json:"prefix"`
+}
 
 // MessageConfig represents message broker configuration.
 type MessageConfig struct {
