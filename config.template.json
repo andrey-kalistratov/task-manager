@@ -1,6 +1,9 @@
 {
   "log_level": "info",
-  "worker_count": 5,
+  "execution": {
+    "work_dir": "/tasks",
+    "default_image": "bash:latest"
+  },
   "storage": {
     "sqlite_file": "/var/lib/task-manager/planner.db",
     "s3": {
@@ -8,7 +11,8 @@
       "bucket": "${MINIO_DEFAULT_BUCKETS}",
       "region": "${MINIO_REGION}",
       "access_key_id": "${MINIO_ROOT_USER}",
-      "secret_access_key": "${MINIO_ROOT_PASSWORD}"
+      "secret_access_key": "${MINIO_ROOT_PASSWORD}",
+      "prefix": "${MINIO_PREFIX}"
     }
   },
   "messaging": {

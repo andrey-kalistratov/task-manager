@@ -20,65 +20,64 @@ type Storage struct {
 	logger *slog.Logger
 }
 
-func NewStorage(cfg *config.Config, logger *slog.Logger) (s *Storage, err error) {
-	s = &Storage{logger: logger}
-
-	defer func() {
-		if err != nil {
-			s.releaseResources()
-		}
-	}()
+func NewStorage(cfg *config.StorageConfig, logger *slog.Logger) (*Storage, error) {
+	s := &Storage{logger: logger}
 
 	const opts = "?_loc=UTC"
-	s.db, err = sql.Open("sqlite3", cfg.Storage.SqliteFile+opts)
+
+	db, err := sql.Open("sqlite3", cfg.SqliteFile+opts)
 	if err != nil {
-		return s, fmt.Errorf("open sqlite db: %w", err)
+		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
+	s.db = db
 
 	if err = initSchema(s.db); err != nil {
-		return s, fmt.Errorf("init sql schema: %w", err)
+		s.close()
+		return nil, fmt.Errorf("init sql schema: %w", err)
 	}
 
-	return
+	return s, nil
 }
 
 func initSchema(db *sql.DB) error {
-	const schema = `CREATE TABLE IF NOT EXISTS tasks
-(
-    id         TEXT PRIMARY KEY,
-    status     TEXT NOT NULL,
-    created_at DATETIME NOT NULL,
-    command    TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    image      TEXT NOT NULL,
-    inputs     TEXT NOT NULL DEFAULT '{}',
-    uploads    TEXT NOT NULL DEFAULT '{}',
-    downloads  TEXT NOT NULL DEFAULT '{}',
-    outputs    TEXT NOT NULL DEFAULT '{}'
-);`
+	const schema = `
+	CREATE TABLE IF NOT EXISTS tasks
+	(
+		id         TEXT PRIMARY KEY,
+		status     TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		command    TEXT NOT NULL,
+		name       TEXT NOT NULL,
+		image      TEXT NOT NULL,
+		inputs     TEXT NOT NULL DEFAULT '{}',
+		uploads    TEXT NOT NULL DEFAULT '{}',
+		downloads  TEXT NOT NULL DEFAULT '{}',
+		outputs    TEXT NOT NULL DEFAULT '{}'
+	);`
 
 	_, err := db.Exec(schema)
 	return err
 }
 
 func (s *Storage) Save(ctx context.Context, t *task.Task) error {
-	const query = `INSERT INTO tasks
-    (id, status, created_at, command, name, image, inputs, uploads, downloads, outputs)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
-    status = excluded.status,
-    created_at = excluded.created_at,
-    command = excluded.command,
-    name = excluded.name,
-    image = excluded.image,
-    inputs = excluded.inputs,
-    uploads = excluded.uploads,
-    downloads = excluded.downloads,
-    outputs = excluded.outputs`
+	const query = `
+	INSERT INTO tasks
+    	(id, status, created_at, command, name, image, inputs, uploads, downloads, outputs)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(id) DO UPDATE SET
+		status = excluded.status,
+		created_at = excluded.created_at,
+		command = excluded.command,
+		name = excluded.name,
+		image = excluded.image,
+		inputs = excluded.inputs,
+		uploads = excluded.uploads,
+		downloads = excluded.downloads,
+		outputs = excluded.outputs`
 
 	dto, err := newTask(t)
 	if err != nil {
-		return fmt.Errorf("serialize task: %w", err)
+		return fmt.Errorf("encode task: %w", err)
 	}
 
 	_, err = s.db.ExecContext(
@@ -102,9 +101,10 @@ ON CONFLICT(id) DO UPDATE SET
 }
 
 func (s *Storage) Get(ctx context.Context, id uuid.UUID) (*task.Task, error) {
-	const query = `SELECT id, status, created_at, command, name, image, inputs, uploads, downloads, outputs 
-FROM tasks 
-WHERE id = ?`
+	const query = `
+	SELECT id, status, created_at, command, name, image, inputs, uploads, downloads, outputs 
+	FROM tasks 
+	WHERE id = ?`
 
 	var dto Task
 	row := s.db.QueryRowContext(ctx, query, id.String())
@@ -126,14 +126,14 @@ WHERE id = ?`
 
 	t, err := dto.toModel()
 	if err != nil {
-		return nil, fmt.Errorf("deserialize task: %w", err)
+		return nil, fmt.Errorf("parse task: %w", err)
 	}
 	return t, nil
 }
 
-func (s *Storage) releaseResources() {
+func (s *Storage) close() {
 	if err := s.db.Close(); err != nil {
-		s.logger.Error("failed to close db", "error", err)
+		s.logger.Error("failed to close sqlite db", "error", err)
 	}
 }
 

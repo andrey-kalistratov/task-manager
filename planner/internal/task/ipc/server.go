@@ -2,29 +2,43 @@ package ipc
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
-	"github.com/andrey-kalistratov/task-manager/planner/unix"
 )
 
-var _ task.Transport = (*Server)(nil)
-
 type Server struct {
-	server *unix.Server
+	server *http.Server
 }
 
-func NewServer(service task.Service, logger *slog.Logger) *Server {
-	router := unix.NewRouter()
+func NewServer(runner Runner, logger *slog.Logger) (*Server, error) {
+	mux := http.NewServeMux()
 
-	router.Register("run", NewRunHandler(service, logger.With("handler", "run")))
+	mux.Handle(runPath, newRunHandler(runner, logger.With("handler", "run")))
 
-	return &Server{server: unix.NewServer(config.UnixSocket, router, logger)}
+	server := &http.Server{Handler: mux}
+
+	return &Server{server: server}, nil
 }
 
-func (s *Server) Serve(ctx context.Context) error {
-	return s.server.ListenAndServe(ctx)
+func (s *Server) Serve() error {
+	if err := os.MkdirAll(filepath.Dir(config.UnixSocket), 0700); err != nil {
+		return fmt.Errorf("create unix socket dir: %w", err)
+	}
+
+	_ = os.Remove(config.UnixSocket)
+
+	ln, err := net.Listen("unix", config.UnixSocket)
+	if err != nil {
+		return fmt.Errorf("listen unix socket: %w", err)
+	}
+
+	return s.server.Serve(ln)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

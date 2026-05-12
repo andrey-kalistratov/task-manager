@@ -1,10 +1,8 @@
 package cli
 
-import (
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
-// NewRootCmd creates a *cobra.Command representing the base CLI cli `tm`.
+// NewRootCmd creates a *cobra.Command representing the base CLI `tm`.
 func NewRootCmd() *cobra.Command {
 	var root = &cobra.Command{
 		Use:   "tm",

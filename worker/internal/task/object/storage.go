@@ -2,7 +2,7 @@ package object
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -11,10 +11,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/andrey-kalistratov/task-manager/planner/internal/config"
-	"github.com/andrey-kalistratov/task-manager/planner/internal/task"
+	"github.com/andrey-kalistratov/task-manager/worker/internal/config"
+	"github.com/andrey-kalistratov/task-manager/worker/internal/task"
 )
 
 var _ task.FileStorage = (*Storage)(nil)
@@ -48,7 +47,7 @@ func (s Storage) Download(ctx context.Context, path string) (io.ReadCloser, erro
 		Key:    aws.String(s.cfg.Prefix + path),
 	})
 	if err != nil {
-		return nil, toFileErr(path, err)
+		return nil, fmt.Errorf("download object: %w", err)
 	}
 	return io.NopCloser(object.Body), nil
 }
@@ -60,21 +59,7 @@ func (s Storage) Upload(ctx context.Context, path string, r io.Reader) error {
 		Body:   r,
 	})
 	if err != nil {
-		return toFileErr(path, err)
+		return fmt.Errorf("upload object: %w", err)
 	}
 	return nil
-}
-
-func toFileErr(path string, err error) error {
-	if _, ok := errors.AsType[*types.NoSuchKey](err); !ok {
-		return &task.FileError{
-			Kind: task.FileErrorNotFound,
-			File: task.File{
-				Path:     path,
-				Provider: task.ProviderFS,
-			},
-			Err: err,
-		}
-	}
-	return err
 }

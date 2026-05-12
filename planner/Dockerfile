@@ -9,13 +9,13 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-COPY planner/ ./planner/
+COPY . .
 
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -o /bin/tmd ./planner/cmd/tmd && \
-    go build -o /bin/tm  ./planner/cmd/tm
+    go build -o /bin/tmd ./cmd/tmd && \
+    go build -o /bin/tm  ./cmd/tm
 
 FROM alpine:3.19
 WORKDIR /app

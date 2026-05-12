@@ -23,6 +23,9 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	cfgPath := flag.String("config", "", "path to config file")
 	flag.Parse()
 
@@ -41,9 +44,6 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("initialize daemon: %w", err)
 	}
 	logger.Info("initialized daemon")
-
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	if err = app.Run(ctx); err != nil {
 		return fmt.Errorf("run daemon: %w", err)

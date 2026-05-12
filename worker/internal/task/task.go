@@ -1,32 +1,34 @@
 package task
 
-import "fmt"
+import "github.com/google/uuid"
 
-type Task interface {
-	Do() error
-	Decode([]byte) error
+type Task struct {
+	ID      uuid.UUID
+	Command string
+	Inputs  map[string]File
+	Outputs map[string]File
 }
 
-var kvTask = map[string]func() Task{
-	"sleep": func() Task { return &SleepTask{} },
-	"echo":  func() Task { return &EchoTask{} },
+type File struct {
+	Path     string
+	Provider StorageProvider
 }
 
-func Decode(key, data []byte) (Task, error) {
-	tt := string(key)
+type StorageProvider int
 
-	ff := kvTask[tt]
+const (
+	ProviderS3 StorageProvider = iota
+	ProviderTask
+)
 
-	if ff == nil {
-		return nil, fmt.Errorf("unknown task type: %s", tt)
-	}
-
-	value := ff()
-	err := value.Decode(data)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return value, nil
+type Result struct {
+	TaskID uuid.UUID
+	Status Status
 }
+
+type Status int
+
+const (
+	StatusSucceeded Status = iota
+	StatusFailed
+)

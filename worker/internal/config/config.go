@@ -2,81 +2,142 @@ package config
 
 import (
 	"encoding/json"
-	"flag"
-	"io"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
-	"strings"
+	"time"
 )
 
+// Config represents the application configuration.
 type Config struct {
-	WorkerCount int    `json:"worker_count"`
-	LogLevel    string `json:"log_level"`
-	Kafka       Kafka  `json:"kafka"`
+	// LogLevel is the logging level. Possible values: debug, info, warn, error.
+	LogLevel slog.Level `json:"log_level"`
+
+	Execution ExecutionConfig `json:"execution"`
+	Storage   StorageConfig   `json:"storage"`
+	Messaging MessageConfig   `json:"messaging"`
+
+	// ShutdownTimeout specifies how much time the application has to finish execution gracefully.
+	ShutdownTimeout Duration `json:"shutdown_timeout"`
 }
 
-type Kafka struct {
-	Topic   string   `json:"topic"`
+// ExecutionConfig represents execution configuration.
+type ExecutionConfig struct {
+	// WorkDir is the root directory for execution.
+	WorkDir string `json:"work_dir"`
+
+	// DefaultImage is the default docker image.
+	DefaultImage string `json:"default_image"`
+}
+
+// StorageConfig represents storage configuration.
+type StorageConfig struct {
+	S3 S3Config `json:"s3"`
+}
+
+// S3Config represents s3 storage configuration.
+type S3Config struct {
+	// Endpoint is the storage server URL.
+	Endpoint string `json:"endpoint"`
+
+	// Bucket is the target bucket name. Must exist on the server.
+	Bucket string `json:"bucket"`
+
+	// Region is used for SigV4 signing. Any non-empty value works
+	// for self-hosted storage if it matches the server config.
+	Region string `json:"region"`
+
+	// AccessKeyID identifies the client. Sent with every request.
+	AccessKeyID string `json:"access_key_id"`
+
+	// SecretAccessKey signs requests locally. Never sent over the wire.
+	SecretAccessKey string `json:"secret_access_key"`
+
+	// Prefix is the root prefix to store objects.
+	Prefix string `json:"prefix"`
+}
+
+// MessageConfig represents message broker configuration.
+type MessageConfig struct {
+	// Brokers is the list of broker addresses (host:port).
 	Brokers []string `json:"brokers"`
-	GroupID string   `json:"group_id"`
+
+	Topics   TopicsConfig   `json:"topics"`
+	GroupIDs GroupIDsConfig `json:"group_ids"`
 }
 
-func Load() (*Config, error) {
-	var cfg Config
-	var path string
+// TopicsConfig holds broker topic names for each message type.
+type TopicsConfig struct {
+	// Tasks is the topic for tasks pending execution.
+	Tasks string `json:"tasks"`
 
-	flag.StringVar(&path, "config", "", "path to config file")
+	// Results is the topic for executed tasks' results.
+	Results string `json:"results"`
+}
 
-	flag.Parse()
+// GroupIDsConfig maps service names to their broker consumer group IDs.
+type GroupIDsConfig struct {
+	// Worker is the worker's consumer group.
+	Worker string `json:"worker"`
+}
 
-	file, err := os.Open(path)
+// Duration is time.Duration that can be unmarshaled from JSON string.
+type Duration time.Duration
+
+func (d *Duration) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	dur, err := time.ParseDuration(s)
 	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+	*d = Duration(dur)
+	return nil
+}
+
+// ErrLoad indicates that loading or parsing the config file failed.
+var ErrLoad = errors.New("failed to load config")
+
+// Load looks for a config file first by the given path, then by standard paths.
+//
+// Pass "" if no path is provided.
+func Load(path string) (*Config, error) {
+	cfg := newDefault()
+
+	paths := []string{
+		path,
+		"/etc/task-manager/worker/config.json",
 	}
-
-	if str := strings.Fields(os.Getenv("KAFKA_BROKERS")); len(str) != 0 {
-		cfg.Kafka.Brokers = str
+	for _, path = range paths {
+		data, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrLoad, err)
+		}
+		if err = json.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrLoad, err)
+		}
+		return cfg, nil
 	}
+	return cfg, nil
+}
 
-	if str := os.Getenv("KAFKA_CONSUME_TOPIC"); str != "" {
-		cfg.Kafka.Topic = str
+func newDefault() *Config {
+	return &Config{
+		LogLevel: slog.LevelError,
+		Messaging: MessageConfig{
+			Topics: TopicsConfig{
+				Tasks:   "tasks",
+				Results: "results",
+			},
+		},
+		ShutdownTimeout: Duration(5 * time.Second),
 	}
-
-	if str := os.Getenv("KAFKA_GROUP_ID"); str != "" {
-		cfg.Kafka.GroupID = str
-	}
-
-	if cfg.WorkerCount <= 0 {
-		cfg.WorkerCount = 1
-	}
-
-	var logOpt slog.HandlerOptions
-
-	switch cfg.LogLevel {
-	case "info":
-		logOpt.Level = slog.LevelInfo
-	case "debug":
-		logOpt.Level = slog.LevelDebug
-	case "warn":
-		logOpt.Level = slog.LevelWarn
-	case "error":
-		logOpt.Level = slog.LevelError
-
-	default:
-		logOpt.Level = slog.LevelInfo
-	}
-
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &logOpt)))
-
-	return &cfg, nil
 }
