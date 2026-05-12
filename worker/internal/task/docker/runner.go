@@ -25,7 +25,7 @@ type Runner struct {
 }
 
 func NewRunner(logger *slog.Logger) (*Runner, error) {
-	cmd := exec.Command("dockerd", "--storage-driver=vfs")
+	cmd := exec.Command("dockerd")
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start dockerd: %w", err)
 	}
