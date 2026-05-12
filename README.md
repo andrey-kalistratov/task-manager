@@ -40,13 +40,54 @@ tm run "<команда>" [флаги]
 |------|----------|
 | `--name` | Имя задачи |
 | `--image` | Docker-образ (по умолчанию `bash:latest`) |
-| `--in key=path` | Входной файл |
-| `--out key=path` | Выходной файл |
+| `--in key=path` | Входной файл: ключ = имя в контейнере, path = путь на хосте planner'а |
+| `--out key=path` | Выходной файл: ключ = имя в контейнере, path = куда сохранить на хосте |
 
-Пример:
+## Примеры
+
+Все примеры запускаются через `docker exec` в контейнере `planner`. Входные файлы лежат в `testdata/`, который примонтирован в `/app/testdata` внутри контейнера.
+
+### Запуск без файлов
+
 ```bash
-tm run "cat input.txt > output.txt" --in input=./data.txt --out result=./output.txt
+docker exec planner tm run "echo 'ok' && date"
 ```
+
+Минимальная проверка что система работает. Результат виден в логах worker'а.
+
+### Сортировка и дедупликация
+
+```bash
+docker exec planner tm run "sort -u < words.txt > sorted.txt" \
+  --name sort-words \
+  --in words.txt=/app/testdata/words.txt \
+  --out sorted.txt=/app/testdata/sorted.txt
+```
+
+`testdata/words.txt` содержит слова с повторами. После выполнения `testdata/sorted.txt` будет содержать уникальные слова в алфавитном порядке.
+
+### Сборка документа из двух частей
+
+```bash
+docker exec planner tm run "cat preamble.txt body.txt > message.txt" \
+  --name assemble \
+  --in preamble.txt=/app/testdata/preamble.txt \
+  --in body.txt=/app/testdata/helloworld.txt \
+  --out message.txt=/app/testdata/message.txt
+```
+
+Склеивает два файла в один. Результат в `testdata/message.txt`.
+
+### Произвольный образ
+
+```bash
+docker exec planner tm run "python3 -c 'import this' > zen.txt" \
+  --name python-zen \
+  --image python:3.12-alpine \
+  --out zen.txt=/app/testdata/zen.txt
+```
+
+Запускает Python в отдельном контейнере, результат сохраняется в `testdata/zen.txt`. Образ скачается автоматически при первом запуске.
 
 ## Жизненный цикл задачи
 
@@ -107,4 +148,10 @@ Worker дополнительно имеет секцию `execution`:
 
 ## Стек
 
-Go, Kafka (`segmentio/kafka-go`), Docker SDK (`moby/moby`), AWS SDK v2 (MinIO), SQLite (`mattn/go-sqlite3`), Cobra, `log/slog`
+- **Go**
+- **Kafka** — `segmentio/kafka-go`
+- **Docker SDK** — `moby/moby`
+- **AWS SDK v2** + MinIO
+- **SQLite** — `mattn/go-sqlite3`
+- **Cobra** (CLI)
+- `log/slog`
