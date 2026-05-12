@@ -78,6 +78,7 @@ func (s *Service) Process(ctx context.Context, t *Task) error {
 		Image:   s.cfg.DefaultImage,
 		WorkDir: filepath.Join(s.cfg.WorkDir, t.ID.String()),
 	}
+
 	exec, err := s.executor.Execute(ctx, spec)
 	if err != nil {
 		return fmt.Errorf("execute task: %w", err)

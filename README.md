@@ -78,17 +78,6 @@ docker exec planner tm run "cat preamble.txt body.txt > message.txt" \
 
 Склеивает два файла в один. Результат в `testdata/message.txt`.
 
-### Произвольный образ
-
-```bash
-docker exec planner tm run "python3 -c 'import this' > zen.txt" \
-  --name python-zen \
-  --image python:3.12-alpine \
-  --out zen.txt=/app/testdata/zen.txt
-```
-
-Запускает Python в отдельном контейнере, результат сохраняется в `testdata/zen.txt`. Образ скачается автоматически при первом запуске.
-
 ## Жизненный цикл задачи
 
 1. CLI отправляет запрос через Unix socket (`/var/run/task-manager/planner.sock`)
