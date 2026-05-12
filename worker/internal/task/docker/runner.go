@@ -43,6 +43,7 @@ func NewRunner(logger *slog.Logger) (*Runner, error) {
 			break
 		}
 		if ctx.Err() != nil {
+			_ = cli.Close()
 			return nil, fmt.Errorf("dockerd did not start in time: %w", ctx.Err())
 		}
 		time.Sleep(100 * time.Millisecond)
