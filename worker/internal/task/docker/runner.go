@@ -35,24 +35,34 @@ func NewRunner(logger *slog.Logger) (*Runner, error) {
 		return nil, fmt.Errorf("create docker client: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	for {
-		if _, err = cli.Ping(ctx, client.PingOptions{}); err == nil {
-			break
-		}
-		if ctx.Err() != nil {
-			_ = cli.Close()
-			return nil, fmt.Errorf("dockerd did not start in time: %w", ctx.Err())
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err = waitForDaemon(cli, 5*time.Second); err != nil {
+		_ = cli.Close()
+		return nil, err
 	}
 
 	return &Runner{
 		cli:    cli,
 		logger: logger,
 	}, nil
+}
+
+func waitForDaemon(cli *client.Client, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("dockerd did not start in time: %w", ctx.Err())
+		case <-ticker.C:
+			if _, err := cli.Ping(ctx, client.PingOptions{}); err == nil {
+				return nil
+			}
+		}
+	}
 }
 
 func (r *Runner) Execute(ctx context.Context, spec task.ExecSpec) (task.Execution, error) {
