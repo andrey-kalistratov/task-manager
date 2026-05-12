@@ -7,10 +7,21 @@
 Два сервиса общаются через Kafka:
 
 ```
-CLI (tm run)
-  └─[Unix socket]─▶ Planner daemon
-                      └─[Kafka: tasks]─▶ Worker
-                      ◀─[Kafka: results]─┘
+    CLI (tm run)                                                                                                                                                                                                 
+         │                                                                                                                                                                                                       
+         │  Unix socket
+         ▼                                                                                                                                                                                                       
+   ┌───────────────┐    Kafka: tasks    ┌──────────────┐                                                                                                                                                       
+   │    Planner    │ ─────────────────▶ │    Worker    │
+   │    daemon     │ ◀───────────────── │              │                                                                                                             
+   └───────────────┘    Kafka: results  └──────────────┘
+          │    │                               │                                                                                                                                                                 
+    state │    │ read results    write results │                                                                                                                                                                 
+          ▼    └──────────┐  ┌─────────────────┘
+     ┌─────────┐          ▼  ▼                                                                                                                                                                                   
+     │ SQLite  │        ┌──────────┐                                                                                                                                                                             
+     └─────────┘        │    S3    │                                                                                                                                                                             
+                        └──────────┘    
 ```
 
 **Planner** — принимает задачи от CLI, хранит состояние в SQLite, загружает входные файлы в S3, публикует задачи в Kafka, получает результаты.
